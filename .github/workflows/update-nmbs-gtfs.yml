@@ -1,0 +1,44 @@
+name: Update NMBS GTFS
+
+on:
+  schedule:
+    - cron: "0 3 * * *"
+      timezone: Europe/Brussels
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: update-nmbs-gtfs
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Download latest NMBS GTFS feed
+        run: |
+          mkdir -p nmbs/gtfs
+          curl --fail --location --retry 5 --retry-all-errors \
+            --output nmbs/gtfs/latest.zip.tmp \
+            https://gtfs.flatturtle.cloud/sncb-nmbs/_latest/sncb-nmbs-gtfs.zip
+          mv nmbs/gtfs/latest.zip.tmp nmbs/gtfs/latest.zip
+
+      - name: Commit updated feed
+        run: |
+          if git diff --quiet -- nmbs/gtfs/latest.zip \
+            && [[ -z "$(git ls-files --others --exclude-standard -- nmbs/gtfs/latest.zip)" ]]; then
+            echo "GTFS feed is unchanged."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add nmbs/gtfs/latest.zip
+          git commit -m "Update NMBS GTFS feed"
+          git push
